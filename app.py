@@ -9,6 +9,13 @@ CARD_NUMBERS = {
     'K': 13, 'A': 14
 }
 
+SUIT_SYMBOLS = {
+    'H': '♥',
+    'D': '♦',
+    'C': '♣',
+    'S': '♠'
+}
+
 # Step 2: Define the order of poker hands
 HAND_RANKS = [
     "High Card", "One Pair", "Two Pair", "Three of a Kind",
@@ -100,8 +107,6 @@ if "players" not in st.session_state:
     st.session_state.players = [[]]
 if "results" not in st.session_state:
     st.session_state.results = [None]
-if "last_cards" not in st.session_state:
-    st.session_state.last_cards = ["" for _ in range(5)]
 if "disable_check" not in st.session_state:
     st.session_state.disable_check = [False]
 
@@ -110,22 +115,19 @@ if st.button("➕ Add Player"):
     st.session_state.results.append(None)
     st.session_state.disable_check.append(False)
 
-# Re-calculate used cards each run
-all_cards_flat = []
+# Rebuild used card list from scratch each time
+used_set = set()
+card_dict = {}  # maps card to player index
+
 for i in range(len(st.session_state.players)):
-    row = []
     for j in range(5):
         card = st.session_state.get(f"p{i}_c{j}", "").strip().upper()
         if card:
-            row.append(card)
-    if len(row) == 5:
-        all_cards_flat.extend(row)
-used_set = set()
-duplicated = False
-for card in all_cards_flat:
-    if card in used_set:
-        duplicated = True
-    used_set.add(card)
+            if card in used_set:
+                card_dict[card].append(i)
+            else:
+                card_dict[card] = [i]
+                used_set.add(card)
 
 # Input and check for each player
 for i in range(len(st.session_state.players)):
@@ -136,30 +138,34 @@ for i in range(len(st.session_state.players)):
 
     for j in range(5):
         key = f"p{i}_c{j}"
-        old_value = st.session_state.get(key, "")
-        card = cols[j].text_input(f"Card {j+1}", value=old_value, key=key)
+        card_input = cols[j].text_input(f"Card {j+1}", key=key)
+        card = card_input.strip().upper()
         current_hand.append(card)
+        if parse_card(card):
+            card_number, suit = parse_card(card)
+            cols[j].markdown(f"### {card[:-1]} {SUIT_SYMBOLS.get(suit, '?')}")
 
     parsed = [parse_card(c) for c in current_hand]
-    card_ids = [c.upper().strip() for c in current_hand]
+    card_ids = [c for c in current_hand]
 
-    # Re-enable button if any card changed
-    if st.session_state.results[i] is not None:
-        if any(st.session_state.get(f"p{i}_c{j}", "").strip().upper() != card_ids[j] for j in range(5)):
-            st.session_state.results[i] = None
-            st.session_state.disable_check[i] = False
+    stored_hand_key = f"stored_hand_{i}"
+    prev_hand = st.session_state.get(stored_hand_key, ["" for _ in range(5)])
+    if card_ids != prev_hand:
+        st.session_state.results[i] = None
+        st.session_state.disable_check[i] = False
 
     if st.button(f"Check Hand Rank (Player {i+1})", disabled=st.session_state.disable_check[i]):
         if None in parsed:
             st.error(f"Player {i+1}: Invalid card(s).")
         elif len(set(card_ids)) < 5:
             st.error(f"Player {i+1}: Duplicate cards in hand.")
-        elif len(set(all_cards_flat)) < len(all_cards_flat):
-            st.error(f"Player {i+1}: Duplicate card used by multiple players.")
+        elif any(len(card_dict[c]) > 1 for c in card_ids):
+            st.error(f"Player {i+1}: Card already used by another player.")
         else:
             result = evaluate_hand(parsed)
             st.session_state.results[i] = result
             st.session_state.disable_check[i] = True
+            st.session_state[stored_hand_key] = card_ids.copy()
             st.success(f"Player {i+1} has a {HAND_RANKS[result[0]]}")
 
 # Find winner
@@ -177,5 +183,10 @@ if st.button("🏆 Find Winner"):
             st.success(f"🏆 Player {winners[0]} wins with a {HAND_RANKS[best[0]]}!")
         else:
             st.info(f"🤝 It's a tie between players: {', '.join(str(w) for w in winners)}")
+
+# Add a reset button to clear everything 
+if st.button("🔄 Reset All"):
+    st.session_state.clear()
+    st.rerun()
 
 # Note: Duplicate card checking is enforced. To allow duplicates (like in testing), remove used_set logic.
