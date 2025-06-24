@@ -148,13 +148,33 @@ if st.button("Evaluate Hands"):
     parsed_players = []
 
     # Convert text cards to structured form: (number, suit)
-    for idx, hand in enumerate(players):  # idx = player number, hand = 5 card strings
-        parsed = [parse_card(c) for c in hand]
-        if None in parsed or len(parsed) != 5:
-            st.error(f"Invalid input for Player {idx+1}. Check all cards are like 'AS', '10D', etc.")
-            valid = False
+        used_cards = set()  # To track already-entered cards (for duplicate check)
+
+    for idx, hand in enumerate(players):  # idx = player index
+        parsed = []
+        for c in hand:  # c = card string like 'AS'
+            card = parse_card(c)
+            if not card:
+                st.error(f"Invalid card '{c}' for Player {idx+1}. Use format like '10S', 'AH', etc.")
+                valid = False
+                break
+
+            card_str = c.upper().strip()
+
+            # === Uncomment the block below to enforce one-deck rule (no duplicate cards) ===
+            # if card_str in used_cards:
+            #     st.error(f"Card '{card_str}' has already been used. Only one standard deck is allowed.")
+            #     valid = False
+            #     break
+            # used_cards.add(card_str)
+            # ===========================================================================
+
+            parsed.append(card)
+
+        if not valid:
             break
         parsed_players.append(parsed)
+
 
     if valid:
         results = []
