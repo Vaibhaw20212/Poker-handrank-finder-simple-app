@@ -1,7 +1,7 @@
 import streamlit as st
 from collections import Counter
 
-# Mapping from card string to number
+# Step 1: Define values for cards like J, Q, K, A
 CARD_NUMBERS = {
     '2': 2, '3': 3, '4': 4, '5': 5,
     '6': 6, '7': 7, '8': 8, '9': 9,
@@ -9,96 +9,158 @@ CARD_NUMBERS = {
     'K': 13, 'A': 14
 }
 
+# Step 2: Define the order of poker hands
 HAND_RANKS = [
     "High Card", "One Pair", "Two Pair", "Three of a Kind",
     "Straight", "Flush", "Full House", "Four of a Kind",
     "Straight Flush", "Royal Flush"
 ]
 
-# Parse card like '10H' to (10, 'H')
+# Step 3: Convert a card like '10H' into (number, suit)
 def parse_card(card_str):
-    card_str = card_str.upper().strip()
+    card_str = card_str.upper().strip()  # Make it uppercase and remove spaces
+
+    # A card must be at least 2 characters, like '2H'
     if len(card_str) < 2:
         return None
-    if card_str[:-1] not in CARD_NUMBERS or card_str[-1] not in "HDCS":
+
+    # The card number should be valid and suit should be H, D, C, or S
+    number_part = card_str[:-1]  # everything except last character
+    suit_part = card_str[-1]     # last character is suit
+
+    if number_part not in CARD_NUMBERS:
         return None
-    return (CARD_NUMBERS[card_str[:-1]], card_str[-1])
+    if suit_part not in "HDCS":
+        return None
 
-# Check for straight
+    number = CARD_NUMBERS[number_part]  # convert to number
+    return (number, suit_part)  # return as a pair (number, suit)
+
+# Step 4: Check if a list of card numbers is a straight
+# (i.e., five cards in a row like 5-6-7-8-9)
 def is_straight(numbers):
-    unique = sorted(set(numbers))
-    if len(unique) < 5:
-        return False, None
-    for i in range(len(unique) - 4):
-        if unique[i+4] - unique[i] == 4:
-            return True, unique[i+4]
-    if set([14, 2, 3, 4, 5]).issubset(set(numbers)):
-        return True, 5
-    return False, None
+    unique_numbers = list(set(numbers))  # remove duplicates
+    unique_numbers.sort()  # sort the list in increasing order
 
-# Evaluate poker hand
+    if len(unique_numbers) < 5:
+        return False, None  # not enough unique cards for a straight
+
+    # Try all possible 5-length sequences
+    for i in range(len(unique_numbers) - 4):
+        first = unique_numbers[i]
+        last = unique_numbers[i + 4]
+        if last - first == 4:
+            return True, last  # found a straight ending at this card number
+
+    # Check special case for A-2-3-4-5
+    if 14 in unique_numbers and all(x in unique_numbers for x in [2, 3, 4, 5]):
+        return True, 5
+
+    return False, None  # not a straight
+
+# Step 5: Evaluate a player's hand and decide its type and strength
+# Input is a list of 5 (number, suit) pairs
 def evaluate_hand(cards):
-    numbers = sorted([n for n, s in cards], reverse=True)
-    suits = [s for n, s in cards]
+    numbers = []
+    suits = []
+
+    for card in cards:
+        number, suit = card
+        numbers.append(number)
+        suits.append(suit)
+
+    numbers.sort(reverse=True)  # sort numbers from high to low
+
+    # Count how many times each number appears
     count_numbers = Counter(numbers)
-    is_flush = len(set(suits)) == 1
+
+    # Check if all cards are the same suit
+    all_same_suit = len(set(suits)) == 1
+
+    # Check if it's a straight
     is_str, high_straight = is_straight(numbers)
 
-    if is_flush and set(numbers) == set([10, 11, 12, 13, 14]):
+    # Check for Royal Flush (10 to Ace, all same suit)
+    if all_same_suit and set(numbers) == set([10, 11, 12, 13, 14]):
         return (9, [])
-    if is_flush and is_str:
+
+    # Check for Straight Flush
+    if all_same_suit and is_str:
         return (8, [high_straight])
-    for number, count in count_numbers.items():
-        if count == 4:
-            kicker = max([n for n in numbers if n != number])
+
+    # Check for Four of a Kind
+    for number in count_numbers:
+        if count_numbers[number] == 4:
+            kicker = max(n for n in numbers if n != number)
             return (7, [number, kicker])
-    triples = [n for n, c in count_numbers.items() if c == 3]
-    pairs = [n for n, c in count_numbers.items() if c == 2]
-    if triples:
-        three = max(triples)
+
+    # Check for Full House (3 of one kind and 2 of another)
+    three_of_kind = [n for n in count_numbers if count_numbers[n] == 3]
+    pairs = [n for n in count_numbers if count_numbers[n] == 2]
+
+    if three_of_kind:
+        three = max(three_of_kind)
         if pairs:
             return (6, [three, max(pairs)])
-        if len(triples) > 1:
-            return (6, [three, min(triples)])
-    if is_flush:
+        if len(three_of_kind) > 1:
+            return (6, [three, min(three_of_kind)])
+
+    # Check for Flush
+    if all_same_suit:
         return (5, numbers)
+
+    # Check for Straight
     if is_str:
         return (4, [high_straight])
-    if triples:
-        three = max(triples)
+
+    # Check for Three of a Kind
+    if three_of_kind:
+        three = max(three_of_kind)
         kickers = [n for n in numbers if n != three][:2]
         return (3, [three] + kickers)
+
+    # Check for Two Pair
     if len(pairs) >= 2:
-        top_two = sorted(pairs, reverse=True)[:2]
-        kicker = max([n for n in numbers if n not in top_two])
-        return (2, top_two + [kicker])
+        sorted_pairs = sorted(pairs, reverse=True)[:2]
+        kicker = max(n for n in numbers if n not in sorted_pairs)
+        return (2, sorted_pairs + [kicker])
+
+    # Check for One Pair
     if len(pairs) == 1:
         pair = pairs[0]
         kickers = [n for n in numbers if n != pair][:3]
         return (1, [pair] + kickers)
+
+    # If none of the above, return High Card
     return (0, numbers[:5])
 
-# Comparison logic
+# Step 6: Compare two hands and return winner
+# Return positive if a > b, negative if b > a, 0 if equal
 def compare_hands(a, b):
     if a[0] != b[0]:
-        return a[0] - b[0]
-    return (a[1] > b[1]) - (a[1] < b[1])
+        return a[0] - b[0]  # higher rank wins
+    return (a[1] > b[1]) - (a[1] < b[1])  # if rank same, use tiebreaker values
 
-# ========== Streamlit UI ==========
+# Step 7: Streamlit app starts here
+
+# Set up the web page layout
 st.set_page_config(page_title="Poker Evaluator", layout="centered")
 st.title("🃏 Poker Hand Evaluator")
 
+# Setup memory for players and results
 if "players" not in st.session_state:
-    st.session_state.players = [[]]  # start with 1 player
+    st.session_state.players = [[]]  # player hands
 if "results" not in st.session_state:
-    st.session_state.results = [None]
+    st.session_state.results = [None]  # evaluation results
+if "used_cards" not in st.session_state:
+    st.session_state.used_cards = set()  # to track duplicate cards across players
 
-# Button to add a new player
+# Button to add another player
 if st.button("➕ Add Player"):
     st.session_state.players.append([])
     st.session_state.results.append(None)
 
-# Input form for each player
+# Section for each player's input
 for i, _ in enumerate(st.session_state.players):
     st.subheader(f"Player {i+1}")
     cols = st.columns(5)
@@ -107,26 +169,49 @@ for i, _ in enumerate(st.session_state.players):
         card = cols[j].text_input(f"Card {j+1}", key=f"p{i}_c{j}")
         hand.append(card)
 
+    # Button to check hand rank
     if st.button(f"Check Hand Rank (Player {i+1})"):
         parsed = [parse_card(c) for c in hand]
-        if None in parsed:
-            st.error(f"Player {i+1}: Invalid card(s) detected.")
-        else:
-            rank = evaluate_hand(parsed)
-            st.session_state.results[i] = rank
-            st.success(f"Player {i+1} has a {HAND_RANKS[rank[0]]}")
+        card_ids = [c.upper().strip() for c in hand]  # original format for tracking
 
-# Final winner calculation
+        # Check for invalid or repeated cards
+        if None in parsed:
+            st.error(f"Player {i+1}: Invalid card(s).")
+        elif len(set(card_ids)) < 5:
+            st.error(f"Player {i+1}: Duplicate cards in hand.")
+        elif any(c in st.session_state.used_cards for c in card_ids):
+            st.error(f"Player {i+1}: Card already used by another player.")
+        else:
+            for c in card_ids:
+                st.session_state.used_cards.add(c)  # remember used cards
+            result = evaluate_hand(parsed)  # calculate hand type
+            st.session_state.results[i] = result  # store result
+            hand_type_index = result[0]
+            hand_type_name = HAND_RANKS[hand_type_index]
+            st.success(f"Player {i+1} has a {hand_type_name}")
+
+# Button to decide the final winner
 if st.button("🏆 Find Winner"):
+    # Check that all players have valid results
     all_valid = all(r is not None for r in st.session_state.results)
     if not all_valid:
         st.warning("Please check all players' hands first.")
     else:
+        # Find the best hand
         best = max(st.session_state.results)
-        winners = [i+1 for i, r in enumerate(st.session_state.results) if r == best]
-        for i, r in enumerate(st.session_state.results):
-            st.write(f"Player {i+1}: {HAND_RANKS[r[0]]}")
+        winners = []
+
+        for index, result in enumerate(st.session_state.results):
+            hand_name = HAND_RANKS[result[0]]
+            st.write(f"Player {index+1}: {hand_name}")
+            if result == best:
+                winners.append(index + 1)
+
+        # Announce winner(s)
         if len(winners) == 1:
             st.success(f"🏆 Player {winners[0]} wins with a {HAND_RANKS[best[0]]}!")
         else:
-            st.info(f"🤝 It's a tie between players: {', '.join(str(w) for w in winners)}")
+            winner_names = ", ".join(str(w) for w in winners)
+            st.info(f"🤝 It's a tie between players: {winner_names}")
+
+# Note: You can comment out the used_cards checks if you want to test with duplicate cards.
