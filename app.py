@@ -134,6 +134,7 @@ def compare_hands(a, b):  # Function to compare two evaluated hands
 # -------------------- Streamlit UI Setup --------------------
 st.set_page_config(page_title="Poker Evaluator", layout="centered")  # Configure Streamlit page settings
 st.title("🃏 Poker Hand Evaluator")  # Display main title with card emoji
+st.subtitle("Write in the format card_number+card_suite, so for eg. Ace of Spades and 9 of Clubs are AS or as and 9c or 9C respectively") 
 
 # Initialize state variables
 if "players" not in st.session_state:  # Check if players list exists in session state
