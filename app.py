@@ -1,3 +1,7 @@
+# User Input → Card Parsing → Validation → Hand Evaluation → Result Storage
+#      ↓                                                           ↓
+# UI Updates ← Display Results ← Winner Determination ← All Players Ready
+
 import streamlit as st  # Import Streamlit library for creating web apps
 from collections import Counter  # Import Counter class to count occurrences of items
 
